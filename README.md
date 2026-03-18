@@ -46,11 +46,20 @@ npm run dev
 ```
 默认访问地址：`http://localhost:5173`。
 
+开发模式下，Vite 会把 `/api/*` 自动代理到 `http://127.0.0.1:8000/*`。
+如果你的后端不是跑在这个地址，可以在前端目录设置环境变量后再启动：
+
+```powershell
+$env:VITE_API_BASE_URL="http://127.0.0.1:8000"
+npm run dev
+```
+
 ## 当前命令
 
 ```powershell
 fileflow init
 fileflow source add "C:\path\to\folder"
+fileflow config set sources.scan_recursive false
 fileflow source remove "C:\path\to\folder"
 fileflow source list
 fileflow config show
@@ -75,3 +84,12 @@ fileflow rules delete 12
 默认 `scan` 仍然是启发式模式；加上 `--ai` 后会尝试使用 rule cache + LLM 分类，并在失败时自动回退到启发式结果。
 
 `preview` 是 `scan` 的显式预览别名，不会移动文件。
+
+如果你想额外管理 `Documents`，但不处理其子文件夹内容，可以先关闭递归扫描：
+
+```powershell
+python -m fileflow.cli config set sources.scan_recursive false
+python -m fileflow.cli source add "$HOME\\Documents"
+```
+
+这个开关当前对所有 source 全局生效。

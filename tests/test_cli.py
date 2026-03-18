@@ -20,6 +20,7 @@ def test_init_and_status(monkeypatch, tmp_path: Path) -> None:
     assert status_result.exit_code == 0
     assert "Initialized" in status_result.stdout
     assert "yes" in status_result.stdout
+    assert "Target root" in status_result.stdout
 
 
 def test_config_edit_uses_editor(monkeypatch, tmp_path: Path) -> None:
@@ -96,6 +97,29 @@ def test_execute_and_undo(monkeypatch, tmp_path: Path) -> None:
     assert "Rolled back 1/1 operation(s)." in undo_result.stdout
     assert original_file.exists()
     assert not moved_file.exists()
+
+
+def test_execute_fails_cleanly_when_target_root_invalid(monkeypatch, tmp_path: Path) -> None:
+    app_home = tmp_path / "app"
+    source_dir = tmp_path / "Downloads"
+    source_dir.mkdir()
+    (source_dir / "note.txt").write_text("hello fileflow\n" * 128, encoding="utf-8")
+
+    monkeypatch.setenv("FILEFLOW_HOME", str(app_home))
+
+    assert runner.invoke(app, ["init"]).exit_code == 0
+    assert runner.invoke(app, ["source", "add", str(source_dir)]).exit_code == 0
+    assert runner.invoke(app, ["config", "set", "general.target_root", "Z:/MissingDrive/Organized"]).exit_code == 0
+
+    def fake_check(path: Path) -> None:
+        raise ValueError("Target root drive does not exist: Z:\\")
+
+    monkeypatch.setattr("fileflow.cli._ensure_target_root_ready", fake_check)
+
+    result = runner.invoke(app, ["scan", "--execute"])
+
+    assert result.exit_code == 1
+    assert "Target root drive does not exist" in result.stdout
 
 
 def test_feedback_apply_and_list(monkeypatch, tmp_path: Path) -> None:

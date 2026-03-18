@@ -8,3 +8,4 @@ INBOX.md
 *.db
 build/
 dist/
+.tmp-validation-home*/

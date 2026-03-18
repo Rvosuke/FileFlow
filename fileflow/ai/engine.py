@@ -14,6 +14,9 @@ if TYPE_CHECKING:
     from fileflow.config import FileFlowConfig
 
 logger = logging.getLogger("fileflow.engine")
+BAD_BATCH_UNKNOWN_PATH_RATIO = 0.5
+BAD_BATCH_MAX_RETRIES = 2
+OPENCLAW_MAX_BATCH_SIZE = 5
 
 
 class DecisionEngine:
@@ -103,23 +106,77 @@ class DecisionEngine:
             return []
 
         all_results: list[ClassifyResult] = []
-        batch_size = self.config.llm.batch_size
+        batch_size = max(1, self.config.llm.batch_size)
+        if getattr(self.config.llm, "provider", "") == "openclaw":
+            batch_size = min(batch_size, OPENCLAW_MAX_BATCH_SIZE)
 
         for i in range(0, len(files), batch_size):
             batch = files[i:i + batch_size]
-            try:
-                batch_results = client.classify(
-                    batch,
-                    top_level_categories=self.config.categories.top_level,
-                    existing_tree=self._get_existing_tree(),
-                    max_depth=self.config.categories.max_depth,
-                )
-                all_results.extend(batch_results)
-                logger.info("LLM classified batch %d-%d (%d results)",
-                            i, i + len(batch), len(batch_results))
-            except Exception as exc:
-                logger.warning("LLM classification failed for batch: %s", exc)
-                # Don't add results for this batch — will fall through to heuristic
+            accepted = False
+            for attempt in range(BAD_BATCH_MAX_RETRIES + 1):
+                try:
+                    batch_results = client.classify(
+                        batch,
+                        top_level_categories=self.config.categories.top_level,
+                        existing_tree=self._get_existing_tree(),
+                        max_depth=self.config.categories.max_depth,
+                    )
+                    parse_stats = getattr(client, "last_parse_stats", {})
+                    raw_items = int(parse_stats.get("raw_items", 0) or 0)
+                    unknown_paths = int(parse_stats.get("unknown_paths", 0) or 0)
+                    unknown_ratio = (unknown_paths / raw_items) if raw_items else 0.0
+
+                    if not batch_results and raw_items == 0:
+                        if attempt < BAD_BATCH_MAX_RETRIES:
+                            logger.warning(
+                                "LLM returned an empty or unparsable response for batch %d-%d "
+                                "(attempt %d/%d); retrying",
+                                i,
+                                i + len(batch),
+                                attempt + 1,
+                                BAD_BATCH_MAX_RETRIES + 1,
+                            )
+                            continue
+                        logger.warning(
+                            "LLM batch %d-%d stayed empty after retries; falling back to heuristic",
+                            i,
+                            i + len(batch),
+                        )
+
+                    if raw_items and unknown_ratio > BAD_BATCH_UNKNOWN_PATH_RATIO:
+                        if attempt < BAD_BATCH_MAX_RETRIES:
+                            logger.warning(
+                                "LLM returned too many unknown paths for batch %d-%d "
+                                "(attempt %d/%d, ratio=%.2f); retrying",
+                                i,
+                                i + len(batch),
+                                attempt + 1,
+                                BAD_BATCH_MAX_RETRIES + 1,
+                                unknown_ratio,
+                            )
+                            continue
+                        logger.warning(
+                            "LLM batch %d-%d exceeded unknown-path threshold after retries; "
+                            "falling back to heuristic",
+                            i,
+                            i + len(batch),
+                        )
+                        batch_results = []
+
+                    all_results.extend(batch_results)
+                    logger.info(
+                        "LLM classified batch %d-%d (%d results)",
+                        i,
+                        i + len(batch),
+                        len(batch_results),
+                    )
+                    accepted = True
+                    break
+                except Exception as exc:
+                    logger.warning("LLM classification failed for batch: %s", exc)
+                    break
+
+            if not accepted:
                 continue
 
         return all_results

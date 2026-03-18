@@ -49,7 +49,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import { api, formatApiError } from '../lib/api'
 
 const status = ref<any>(null)
 const loading = ref(true)
@@ -57,11 +57,11 @@ const error = ref('')
 
 onMounted(async () => {
   try {
-    const response = await axios.get('http://localhost:8000/status')
+    const response = await api.get('/status')
     status.value = response.data
   } catch (e: any) {
     console.error(e)
-    error.value = 'Failed to load status. Make sure the API server is running.'
+    error.value = formatApiError(e, 'Failed to load status. Make sure the API server is running')
   } finally {
     loading.value = false
   }

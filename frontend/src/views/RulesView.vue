@@ -55,7 +55,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import { api, formatApiError } from '../lib/api'
 
 const items = ref<any[]>([])
 const loading = ref(true)
@@ -68,10 +68,10 @@ const fetchRules = async () => {
   try {
     const params: any = { limit: 100 }
     if (filterType.value) params.type = filterType.value
-    const response = await axios.get('http://localhost:8000/rules', { params })
+    const response = await api.get('/rules', { params })
     items.value = response.data.items
   } catch (e: any) {
-    error.value = 'Failed to load rules: ' + e.message
+    error.value = formatApiError(e, 'Failed to load rules')
   } finally {
     loading.value = false
   }

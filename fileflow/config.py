@@ -21,9 +21,13 @@ DEFAULT_TOP_LEVEL_CATEGORIES = [
 ]
 
 
+def default_target_root() -> str:
+    return str((Path.home() / "Organized").resolve(strict=False))
+
+
 @dataclass(slots=True)
 class GeneralConfig:
-    target_root: str = "D:/Organized"
+    target_root: str = field(default_factory=default_target_root)
     dry_run: bool = True
     create_shortcut: bool = True
     scan_interval_minutes: int = 30
@@ -33,6 +37,7 @@ class GeneralConfig:
 @dataclass(slots=True)
 class SourcesConfig:
     paths: list[str] = field(default_factory=list)
+    scan_recursive: bool = True
     exclude_patterns: list[str] = field(
         default_factory=lambda: [
             "*.tmp",
@@ -53,6 +58,7 @@ class LLMConfig:
     provider: str = "openclaw"
     ollama_model: str = "qwen3:8b"
     ollama_url: str = "http://localhost:11434"
+    openclaw_agent: str = "main"
     max_tokens: int = 500
     temperature: float = 0.1
     batch_size: int = 10
@@ -104,6 +110,7 @@ class FileFlowConfig:
             },
             "sources": {
                 "paths": self.sources.paths,
+                "scan_recursive": self.sources.scan_recursive,
                 "exclude_patterns": self.sources.exclude_patterns,
                 "min_file_size_kb": self.sources.min_file_size_kb,
                 "max_file_size_mb": self.sources.max_file_size_mb,
@@ -112,6 +119,7 @@ class FileFlowConfig:
                 "provider": self.llm.provider,
                 "ollama_model": self.llm.ollama_model,
                 "ollama_url": self.llm.ollama_url,
+                "openclaw_agent": self.llm.openclaw_agent,
                 "max_tokens": self.llm.max_tokens,
                 "temperature": self.llm.temperature,
                 "batch_size": self.llm.batch_size,
@@ -169,6 +177,7 @@ def load_default_config_dict() -> dict[str, Any]:
 
 def build_runtime_default_config_dict() -> dict[str, Any]:
     config = load_default_config_dict()
+    config["general"]["target_root"] = default_target_root()
     config["sources"]["paths"] = []
     return config
 

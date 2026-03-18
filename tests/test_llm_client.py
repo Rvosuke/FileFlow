@@ -148,6 +148,11 @@ class TestParseResponse:
             max_depth=3,
         )
         assert results == []
+        assert client.last_parse_stats == {
+            "raw_items": 1,
+            "matched_items": 0,
+            "unknown_paths": 1,
+        }
 
     def test_low_confidence_becomes_review(self, tmp_path: Path) -> None:
         client = _make_client()
@@ -234,16 +239,92 @@ class TestParseResponse:
 
 
 class TestProviderFallback:
-    def test_openclaw_falls_back_to_ollama_on_connect_error(self) -> None:
-        import httpx
-        client = _make_client("openclaw")
+    def test_openclaw_cmd_wrapper_uses_node_mjs(self, tmp_path: Path) -> None:
+        bin_dir = tmp_path / "bin"
+        cmd_path = bin_dir / "openclaw.cmd"
+        cmd_path.parent.mkdir(parents=True, exist_ok=True)
+        cmd_path.write_text("@echo off\r\n", encoding="utf-8")
 
-        with patch.object(client, "_call_ollama", return_value="fallback response") as mock_ollama:
-            with patch("fileflow.ai.llm_client.httpx.post", side_effect=httpx.ConnectError("connection refused")):
+        mjs_path = tmp_path / "node_modules" / "openclaw" / "openclaw.mjs"
+        mjs_path.parent.mkdir(parents=True, exist_ok=True)
+        mjs_path.write_text("console.log('ok')\n", encoding="utf-8")
+
+        node_path = tmp_path / "node.exe"
+        node_path.write_text("", encoding="utf-8")
+
+        def fake_which(name: str) -> str | None:
+            mapping = {
+                "openclaw": None,
+                "openclaw.cmd": str(cmd_path),
+                "openclaw.ps1": None,
+                "node": str(node_path),
+            }
+            return mapping.get(name)
+
+        with patch("fileflow.ai.llm_client.shutil.which", side_effect=fake_which):
+            with patch("fileflow.ai.llm_client.sys.platform", "win32"):
+                assert LLMClient._openclaw_node_cmd() == [str(node_path), str(mjs_path)]
+
+    def test_openclaw_ps1_wrapper_uses_node_mjs(self, tmp_path: Path) -> None:
+        scripts_dir = tmp_path / "scripts"
+        ps1_path = scripts_dir / "openclaw.ps1"
+        ps1_path.parent.mkdir(parents=True, exist_ok=True)
+        ps1_path.write_text("Write-Host ok\n", encoding="utf-8")
+
+        mjs_path = scripts_dir / "node_modules" / "openclaw" / "openclaw.mjs"
+        mjs_path.parent.mkdir(parents=True, exist_ok=True)
+        mjs_path.write_text("console.log('ok')\n", encoding="utf-8")
+
+        node_path = tmp_path / "node.exe"
+        node_path.write_text("", encoding="utf-8")
+
+        def fake_which(name: str) -> str | None:
+            mapping = {
+                "openclaw": None,
+                "openclaw.cmd": None,
+                "openclaw.ps1": str(ps1_path),
+                "node": str(node_path),
+            }
+            return mapping.get(name)
+
+        with patch("fileflow.ai.llm_client.shutil.which", side_effect=fake_which):
+            with patch("fileflow.ai.llm_client.sys.platform", "win32"):
+                assert LLMClient._openclaw_node_cmd() == [str(node_path), str(mjs_path)]
+
+    def test_openclaw_returns_stdout_on_success(self) -> None:
+        client = _make_client("openclaw")
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = b'[{"test": true}]'
+
+        with patch("fileflow.ai.llm_client.subprocess.run", return_value=mock_result) as mock_run:
+            with patch.object(client, "_openclaw_node_cmd", return_value=["openclaw"]):
                 result = client._call_openclaw("test prompt")
 
-        assert result == "fallback response"
-        mock_ollama.assert_called_once_with("test prompt")
+        assert result == '[{"test": true}]'
+        mock_run.assert_called_once()
+        call_args = mock_run.call_args[0][0]
+        assert "--local" in call_args
+
+    def test_openclaw_returns_empty_on_failure(self) -> None:
+        client = _make_client("openclaw")
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stderr = b"some error"
+        mock_result.stdout = b""
+
+        with patch("fileflow.ai.llm_client.subprocess.run", return_value=mock_result):
+            with patch.object(client, "_openclaw_node_cmd", return_value=["openclaw"]):
+                result = client._call_openclaw("test prompt")
+
+        assert result == ""
+
+    def test_openclaw_returns_empty_on_file_not_found(self) -> None:
+        client = _make_client("openclaw")
+        with patch("fileflow.ai.llm_client.subprocess.run", side_effect=FileNotFoundError("openclaw not found")):
+            with patch.object(client, "_openclaw_node_cmd", return_value=["openclaw"]):
+                result = client._call_openclaw("test prompt")
+        assert result == ""
 
     def test_unsupported_provider_raises(self) -> None:
         client = _make_client("nonexistent")

@@ -13,6 +13,7 @@ from fileflow.config import (
     SafetyConfig,
     DEFAULT_TOP_LEVEL_CATEGORIES,
     add_source_path,
+    default_target_root,
     initialize_app,
     load_config,
     remove_source_path,
@@ -30,7 +31,7 @@ class TestGeneralConfigDefaults:
 
     def test_default_values(self) -> None:
         cfg = GeneralConfig()
-        assert cfg.target_root == "D:/Organized"
+        assert cfg.target_root == default_target_root()
         assert cfg.dry_run is True
         assert cfg.create_shortcut is True
         assert cfg.scan_interval_minutes == 30
@@ -42,6 +43,10 @@ class TestSourcesConfigDefaults:
     def test_default_paths_empty(self) -> None:
         cfg = SourcesConfig()
         assert cfg.paths == []
+
+    def test_default_scan_recursive_enabled(self) -> None:
+        cfg = SourcesConfig()
+        assert cfg.scan_recursive is True
 
     def test_default_exclude_patterns(self) -> None:
         cfg = SourcesConfig()
@@ -101,6 +106,7 @@ class TestFileFlowConfig:
             },
             "sources": {
                 "paths": ["/tmp/downloads"],
+                "scan_recursive": False,
                 "exclude_patterns": ["*.log"],
                 "min_file_size_kb": 5,
                 "max_file_size_mb": 1024,
@@ -109,6 +115,7 @@ class TestFileFlowConfig:
                 "provider": "ollama",
                 "ollama_model": "llama3:8b",
                 "ollama_url": "http://localhost:11434",
+                "openclaw_agent": "main",
                 "max_tokens": 300,
                 "temperature": 0.5,
                 "batch_size": 20,
@@ -128,6 +135,7 @@ class TestFileFlowConfig:
         assert cfg.general.target_root == "E:/Sorted"
         assert cfg.general.dry_run is False
         assert cfg.sources.paths == ["/tmp/downloads"]
+        assert cfg.sources.scan_recursive is False
         assert cfg.llm.provider == "ollama"
         assert cfg.categories.top_level == ["A", "B"]
         assert cfg.safety.log_retention_days == 30
@@ -222,6 +230,7 @@ class TestInitializeAndLoadConfig:
         assert paths.database_file.exists()
 
         config = load_config(home=home)
+        assert config.general.target_root == default_target_root()
         assert config.general.dry_run is True
         assert config.llm.provider == "openclaw"
 

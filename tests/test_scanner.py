@@ -129,3 +129,19 @@ class TestScanBasics:
 
         assert result.files == []
         assert any("below min" in s.reason for s in result.skipped)
+
+    def test_non_recursive_scan_only_reads_top_level_files(self, tmp_path: Path) -> None:
+        _create_tree(tmp_path, {
+            "top.txt": "top level",
+            "nested/inside.txt": "nested level",
+        })
+        config = FileFlowConfig()
+        config.sources.paths = [str(tmp_path / "source")]
+        config.sources.min_file_size_kb = 0
+        config.sources.scan_recursive = False
+
+        result = FileScanner(config).scan()
+
+        names = [f.name + f.extension for f in result.files]
+        assert "top.txt" in names
+        assert "inside.txt" not in names

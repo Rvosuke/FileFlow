@@ -1,5 +1,5 @@
 [general]
-target_root = "D:/Organized"
+target_root = "C:/Users/你的用户名/Organized"
 dry_run = true
 create_shortcut = true
 scan_interval_minutes = 30
@@ -10,6 +10,7 @@ paths = [
     "C:/Users/你的用户名/Downloads",
     "C:/Users/你的用户名/Desktop",
 ]
+scan_recursive = true
 exclude_patterns = [
     "*.tmp",
     "*.crdownload",
@@ -26,6 +27,7 @@ max_file_size_mb = 5120
 provider = "openclaw"
 ollama_model = "qwen3:8b"
 ollama_url = "http://localhost:11434"
+openclaw_agent = "main"
 max_tokens = 500
 temperature = 0.1
 batch_size = 10

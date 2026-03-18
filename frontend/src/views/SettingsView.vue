@@ -6,7 +6,7 @@
     <div v-if="loading" class="loading">Loading configuration...</div>
     <div v-else-if="error" class="error">{{ error }}</div>
     <div v-else-if="config">
-      <div v-for="(section, sectionName) in config" :key="sectionName" class="section-card">
+      <div v-for="(section, sectionName) in config" :key="String(sectionName)" class="section-card">
         <h3>{{ capitalize(sectionName) }}</h3>
         <div class="config-grid">
           <div v-for="(value, key) in section" :key="key" class="config-item">
@@ -14,7 +14,7 @@
             <span class="value">
               <code v-if="typeof value !== 'object'">{{ value }}</code>
               <ul v-else-if="Array.isArray(value)">
-                <li v-for="item in value" :key="item"><code>{{ item }}</code></li>
+                <li v-for="item in value" :key="String(item)"><code>{{ item }}</code></li>
               </ul>
               <pre v-else><code>{{ JSON.stringify(value, null, 2) }}</code></pre>
             </span>
@@ -27,20 +27,23 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import { api, formatApiError } from '../lib/api'
 
 const config = ref<any>(null)
 const loading = ref(true)
 const error = ref('')
 
-const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+const capitalize = (s: string | number) => {
+  const text = String(s)
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
 
 onMounted(async () => {
   try {
-    const response = await axios.get('http://localhost:8000/config')
+    const response = await api.get('/config')
     config.value = response.data
   } catch (e: any) {
-    error.value = 'Failed to load configuration: ' + e.message
+    error.value = formatApiError(e, 'Failed to load configuration')
   } finally {
     loading.value = false
   }

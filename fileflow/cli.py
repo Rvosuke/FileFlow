@@ -45,6 +45,15 @@ def _require_initialized() -> None:
         raise typer.Exit(code=1)
 
 
+def _ensure_target_root_ready(target_root: Path) -> None:
+    anchor = target_root.anchor
+    if anchor and not Path(anchor).exists():
+        raise ValueError(
+            f"Target root drive does not exist: {anchor} "
+            f"(current target_root={target_root}). Update `general.target_root` first."
+        )
+
+
 @app.callback()
 def main_callback() -> None:
     """FileFlow entrypoint."""
@@ -157,6 +166,7 @@ def status() -> None:
         config = load_config()
         database = Database(paths.database_file)
         stats = database.get_stats()
+        table.add_row("Target root", config.general.target_root)
         table.add_row("Source folders", str(len(config.sources.paths)))
         table.add_row("Move records", str(stats.move_records))
         table.add_row("Rule cache rows", str(stats.rule_cache_rows))
@@ -258,8 +268,14 @@ def scan(
     # Execute moves if requested
     if execute and move_count > 0:
         from fileflow.executor.mover import FileMover
+        target_root = Path(config.general.target_root)
+        try:
+            _ensure_target_root_ready(target_root)
+        except ValueError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=1) from exc
         mover = FileMover(
-            target_root=Path(config.general.target_root),
+            target_root=target_root,
             db_path=paths.database_file,
             create_shortcut=config.general.create_shortcut,
         )
@@ -593,6 +609,12 @@ def watch(
     _require_initialized()
     config = load_config()
     paths = resolve_app_paths()
+    if execute:
+        try:
+            _ensure_target_root_ready(Path(config.general.target_root))
+        except ValueError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise typer.Exit(code=1) from exc
     from fileflow.watcher import start_watching
     start_watching(config, paths.database_file, execute=execute, use_ai=ai)
 

@@ -38,7 +38,7 @@ class FileScanner:
                 skipped.append(SkippedFile(path=resolved_root, reason="source path not found"))
                 continue
 
-            for candidate in resolved_root.rglob("*"):
+            for candidate in self._iter_candidates(resolved_root):
                 if not candidate.is_file():
                     continue
 
@@ -64,6 +64,11 @@ class FileScanner:
 
         duration_ms = int((perf_counter() - started) * 1000)
         return ScanResult(files=files, skipped=skipped, duration_ms=duration_ms)
+
+    def _iter_candidates(self, root: Path):
+        if self.config.sources.scan_recursive:
+            return root.rglob("*")
+        return root.iterdir()
 
     def _skip_reason(self, path: Path, root: Path) -> str | None:
         if self._is_under_protected_path(path):

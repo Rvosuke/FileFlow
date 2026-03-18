@@ -1,10 +1,14 @@
-"""LLM abstraction layer — supports Ollama and direct API providers."""
+"""LLM abstraction layer — supports Ollama and OpenClaw agent."""
 
 from __future__ import annotations
 
 import json
 import logging
 import re
+import shutil
+import subprocess
+import sys
+import uuid
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
@@ -30,6 +34,11 @@ class LLMClient:
     def __init__(self, config: "FileFlowConfig"):
         self.config = config
         self.provider = config.llm.provider
+        self.last_parse_stats = {
+            "raw_items": 0,
+            "matched_items": 0,
+            "unknown_paths": 0,
+        }
 
     def classify(
         self,
@@ -80,24 +89,69 @@ class LLMClient:
         data = resp.json()
         return data.get("message", {}).get("content", "")
 
+    @staticmethod
+    def _openclaw_node_cmd() -> list[str]:
+        """Return [node, openclaw.mjs] to bypass .cmd wrapper encoding issues."""
+        cmd_path = (
+            shutil.which("openclaw")
+            or shutil.which("openclaw.cmd")
+            or shutil.which("openclaw.ps1")
+        )
+        if cmd_path is None:
+            raise FileNotFoundError("openclaw not found in PATH")
+        cmd = Path(cmd_path)
+        if cmd.suffix.lower() in {".js", ".mjs"}:
+            node = shutil.which("node")
+            if node:
+                return [node, str(cmd)]
+            return [str(cmd)]
+
+        if sys.platform == "win32" and cmd.suffix.lower() in {".cmd", ".ps1"}:
+            candidates = [
+                cmd.parent / "node_modules" / "openclaw" / "openclaw.mjs",
+                cmd.parent.parent / "node_modules" / "openclaw" / "openclaw.mjs",
+            ]
+            node = shutil.which("node")
+            if node:
+                for mjs in candidates:
+                    if mjs.exists():
+                        return [node, str(mjs)]
+        return [str(cmd)]
+
     def _call_openclaw(self, prompt: str) -> str:
-        """Call OpenClaw local gateway."""
-        url = "http://localhost:3000/api/chat"
-        payload = {
-            "messages": [
-                {"role": "system", "content": CLASSIFY_SYSTEM},
-                {"role": "user", "content": prompt},
-            ],
-        }
-        logger.info("Calling OpenClaw gateway")
+        """Call OpenClaw via local agent subprocess."""
+        agent_id = getattr(self.config.llm, "openclaw_agent", "main")
+        # Combine system + user into one message so the agent outputs clean JSON.
+        # On Windows, subprocess argument encoding can mangle non-ASCII chars.
+        # Replace non-ASCII with \uXXXX escapes (leaving ASCII like \ unchanged).
+        combined = f"{CLASSIFY_SYSTEM}\n\n{prompt}"
+        if sys.platform == "win32":
+            combined = "".join(
+                c if ord(c) < 128 else f"\\u{ord(c):04x}" for c in combined
+            )
+        logger.info("Calling OpenClaw agent (id=%s)", agent_id)
         try:
-            resp = httpx.post(url, json=payload, timeout=120.0)
-            resp.raise_for_status()
-            data = resp.json()
-            return data.get("message", {}).get("content", "")
-        except httpx.ConnectError:
-            logger.warning("OpenClaw not available, falling back to Ollama")
-            return self._call_ollama(prompt)
+            session_id = f"ff-classify-{uuid.uuid4().hex[:8]}"
+            cmd = self._openclaw_node_cmd() + [
+                "agent", "--local", "--agent", agent_id,
+                "--session-id", session_id,
+                "--message", combined,
+            ]
+            env = {**__import__("os").environ, "FORCE_COLOR": "0"}
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                timeout=120,
+                env=env,
+            )
+            if result.returncode != 0:
+                logger.error("OpenClaw agent error: %s", result.stderr[:300])
+                return ""
+            # The model response is always UTF-8, regardless of platform
+            return result.stdout.decode("utf-8", errors="replace").strip()
+        except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+            logger.error("OpenClaw subprocess failed: %s", exc)
+            return ""
 
     def _parse_response(
         self,
@@ -108,6 +162,11 @@ class LLMClient:
         max_depth: int,
     ) -> list[ClassifyResult]:
         """Parse LLM JSON response into ClassifyResult list."""
+        self.last_parse_stats = {
+            "raw_items": 0,
+            "matched_items": 0,
+            "unknown_paths": 0,
+        }
         # Extract JSON from markdown code blocks if present
         json_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", raw, re.DOTALL)
         json_str = json_match.group(1) if json_match else raw.strip()
@@ -121,6 +180,8 @@ class LLMClient:
             logger.error("LLM response is not a list")
             return []
 
+        self.last_parse_stats["raw_items"] = len(items)
+
         # Build path lookup for matching results back to files
         path_lookup = {str(f.path): f for f in files}
 
@@ -129,6 +190,7 @@ class LLMClient:
             original = item.get("original_path", "")
             meta = path_lookup.get(original)
             if not meta:
+                self.last_parse_stats["unknown_paths"] += 1
                 logger.warning("LLM returned unknown path: %s", original)
                 continue
 
@@ -158,6 +220,7 @@ class LLMClient:
                 broad_category=meta.broad_category,
             ))
 
+        self.last_parse_stats["matched_items"] = len(results)
         return results
 
     @staticmethod

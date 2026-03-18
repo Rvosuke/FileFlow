@@ -39,7 +39,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import { api, formatApiError } from '../lib/api'
 
 const items = ref<any[]>([])
 const loading = ref(true)
@@ -47,10 +47,10 @@ const error = ref('')
 
 onMounted(async () => {
   try {
-    const response = await axios.get('http://localhost:8000/history')
+    const response = await api.get('/history')
     items.value = response.data.items
   } catch (e: any) {
-    error.value = 'Failed to load history: ' + e.message
+    error.value = formatApiError(e, 'Failed to load history')
   } finally {
     loading.value = false
   }

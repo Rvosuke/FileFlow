@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
+from unittest.mock import patch, PropertyMock
 
 import pytest
 
 from fileflow.ai.decision import ClassifyResult, HeuristicClassifier
-from fileflow.ai.engine import DecisionEngine
+from fileflow.ai.engine import BAD_BATCH_MAX_RETRIES, OPENCLAW_MAX_BATCH_SIZE, DecisionEngine
 from fileflow.ai.rule_cache import RuleCache
 from fileflow.analyzer.meta import collect_file_meta
 from fileflow.config import FileFlowConfig
@@ -41,9 +42,9 @@ class TestHeuristicFallback:
         f = _create_file(tmp_path, "report.pdf")
         meta = collect_file_meta(f)
 
-        # No LLM client, so should fall back to heuristic
-        engine._llm_client = None
-        results = engine.classify([meta])
+        # Patch llm_client property to return None (no LLM available)
+        with patch.object(type(engine), "llm_client", new_callable=PropertyMock, return_value=None):
+            results = engine.classify([meta])
 
         assert len(results) == 1
         assert results[0].source == "heuristic"
@@ -54,8 +55,8 @@ class TestHeuristicFallback:
         f = _create_file(tmp_path, "mystery.xyz", content="\x00" * 2048)
         meta = collect_file_meta(f)
 
-        engine._llm_client = None
-        results = engine.classify([meta])
+        with patch.object(type(engine), "llm_client", new_callable=PropertyMock, return_value=None):
+            results = engine.classify([meta])
 
         assert len(results) == 1
         assert results[0].action == "review"
@@ -222,6 +223,161 @@ class TestLLMIntegration:
         assert results[0].source == "llm"
         assert results[1].source == "heuristic"
 
+    def test_bad_batch_retries_and_recovers(self, tmp_path: Path) -> None:
+        _, _, engine = _setup(tmp_path)
+        f = _create_file(tmp_path, "invoice.pdf")
+        meta = collect_file_meta(f)
+
+        class _RetryingClient:
+            def __init__(self) -> None:
+                self.calls = 0
+                self.last_parse_stats = {}
+
+            def classify(self, files, **kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    self.last_parse_stats = {
+                        "raw_items": 1,
+                        "matched_items": 0,
+                        "unknown_paths": 1,
+                    }
+                    return []
+                self.last_parse_stats = {
+                    "raw_items": 1,
+                    "matched_items": 1,
+                    "unknown_paths": 0,
+                }
+                return [
+                    ClassifyResult(
+                        original_path=files[0].path,
+                        target_path="文档/发票",
+                        suggested_rename=None,
+                        confidence=0.92,
+                        action="move",
+                        reason="invoice",
+                        source="llm",
+                        broad_category="document",
+                    )
+                ]
+
+        fake_client = _RetryingClient()
+        with patch.object(type(engine), "llm_client", new_callable=PropertyMock, return_value=fake_client):
+            results = engine._try_llm_classify([meta])
+
+        assert fake_client.calls == 2
+        assert len(results) == 1
+        assert results[0].source == "llm"
+
+    def test_bad_batch_exhausts_retries(self, tmp_path: Path) -> None:
+        _, _, engine = _setup(tmp_path)
+        f = _create_file(tmp_path, "invoice.pdf")
+        meta = collect_file_meta(f)
+
+        class _AlwaysBadClient:
+            def __init__(self) -> None:
+                self.calls = 0
+                self.last_parse_stats = {}
+
+            def classify(self, files, **kwargs):
+                self.calls += 1
+                self.last_parse_stats = {
+                    "raw_items": len(files),
+                    "matched_items": 0,
+                    "unknown_paths": len(files),
+                }
+                return []
+
+        fake_client = _AlwaysBadClient()
+        with patch.object(type(engine), "llm_client", new_callable=PropertyMock, return_value=fake_client):
+            results = engine._try_llm_classify([meta])
+
+        assert fake_client.calls == BAD_BATCH_MAX_RETRIES + 1
+        assert results == []
+
+    def test_empty_batch_response_retries_and_recovers(self, tmp_path: Path) -> None:
+        _, _, engine = _setup(tmp_path)
+        f = _create_file(tmp_path, "invoice.pdf")
+        meta = collect_file_meta(f)
+
+        class _EmptyThenOkClient:
+            def __init__(self) -> None:
+                self.calls = 0
+                self.last_parse_stats = {}
+
+            def classify(self, files, **kwargs):
+                self.calls += 1
+                if self.calls == 1:
+                    self.last_parse_stats = {
+                        "raw_items": 0,
+                        "matched_items": 0,
+                        "unknown_paths": 0,
+                    }
+                    return []
+                self.last_parse_stats = {
+                    "raw_items": 1,
+                    "matched_items": 1,
+                    "unknown_paths": 0,
+                }
+                return [
+                    ClassifyResult(
+                        original_path=files[0].path,
+                        target_path="文档/发票",
+                        suggested_rename=None,
+                        confidence=0.93,
+                        action="move",
+                        reason="invoice",
+                        source="llm",
+                        broad_category="document",
+                    )
+                ]
+
+        fake_client = _EmptyThenOkClient()
+        with patch.object(type(engine), "llm_client", new_callable=PropertyMock, return_value=fake_client):
+            results = engine._try_llm_classify([meta])
+
+        assert fake_client.calls == 2
+        assert len(results) == 1
+        assert results[0].source == "llm"
+
+    def test_openclaw_caps_batch_size(self, tmp_path: Path) -> None:
+        config, _, engine = _setup(tmp_path)
+        config.llm.batch_size = 10
+        files = [_create_file(tmp_path, f"f{i}.pdf") for i in range(OPENCLAW_MAX_BATCH_SIZE + 1)]
+        metas = [collect_file_meta(f) for f in files]
+
+        class _RecordingClient:
+            def __init__(self) -> None:
+                self.batch_sizes: list[int] = []
+                self.last_parse_stats = {}
+
+            def classify(self, batch, **kwargs):
+                self.batch_sizes.append(len(batch))
+                self.last_parse_stats = {
+                    "raw_items": len(batch),
+                    "matched_items": len(batch),
+                    "unknown_paths": 0,
+                }
+                return [
+                    ClassifyResult(
+                        original_path=meta.path,
+                        target_path="文档/批处理",
+                        suggested_rename=None,
+                        confidence=0.9,
+                        action="move",
+                        reason="batch",
+                        source="llm",
+                        broad_category="document",
+                    )
+                    for meta in batch
+                ]
+
+        fake_client = _RecordingClient()
+        with patch.object(type(engine), "llm_client", new_callable=PropertyMock, return_value=fake_client):
+            results = engine._try_llm_classify(metas)
+
+        assert fake_client.batch_sizes == [OPENCLAW_MAX_BATCH_SIZE, 1]
+        assert len(results) == len(metas)
+
 
 # ── Mixed cache + LLM ──
 
@@ -242,8 +398,8 @@ class TestMixedFlow:
                 ("exact", meta_cached.name + meta_cached.extension, "文档/财务", 0.95),
             )
 
-        engine._llm_client = None  # heuristic fallback for uncached
-        results = engine.classify([meta_cached, meta_new])
+        with patch.object(type(engine), "llm_client", new_callable=PropertyMock, return_value=None):
+            results = engine.classify([meta_cached, meta_new])
 
         assert len(results) == 2
         assert results[0].source == "rule_cache"
@@ -255,7 +411,7 @@ class TestMixedFlow:
         files = [_create_file(tmp_path, f"f{i}.txt") for i in range(5)]
         metas = [collect_file_meta(f) for f in files]
 
-        engine._llm_client = None
-        results = engine.classify(metas)
+        with patch.object(type(engine), "llm_client", new_callable=PropertyMock, return_value=None):
+            results = engine.classify(metas)
 
         assert [r.original_path for r in results] == [m.path for m in metas]
