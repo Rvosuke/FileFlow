@@ -31,10 +31,17 @@ fileflow config show
 fileflow config set general.dry_run false
 fileflow status
 fileflow scan
+fileflow preview
 fileflow scan --ai
 fileflow scan --execute
 fileflow undo
 fileflow history
+fileflow feedback apply 12 "文档/归档"
+fileflow feedback list
+fileflow rules
+fileflow rules --type pattern
 ```
 
 默认 `scan` 仍然是启发式模式；加上 `--ai` 后会尝试使用 rule cache + LLM 分类，并在失败时自动回退到启发式结果。
+
+`preview` 是 `scan` 的显式预览别名，不会移动文件。
