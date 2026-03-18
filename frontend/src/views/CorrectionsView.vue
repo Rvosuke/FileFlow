@@ -5,6 +5,10 @@
 
     <div v-if="loading" class="loading">Loading corrections...</div>
     <div v-else-if="error" class="error">{{ error }}</div>
+    <div v-else-if="items.length === 0" class="empty-state">
+      <p>No corrections found.</p>
+      <p class="hint">Use <code>fileflow feedback apply ...</code> to correct a move and create a new rule.</p>
+    </div>
     <div v-else>
       <table>
         <thead>
@@ -86,4 +90,21 @@ code {
 
 .file-path { max-width: 400px; word-break: break-all; }
 .date { white-space: nowrap; font-size: 0.9rem; color: #666; }
+
+.loading, .error, .empty-state {
+  text-align: center;
+  padding: 3rem;
+  font-size: 1.1rem;
+}
+
+.error { color: #e74c3c; }
+
+.empty-state {
+  background: #f9f9f9;
+  border-radius: 8px;
+  color: #888;
+  border: 1px dashed #ddd;
+}
+
+.hint { font-size: 0.9rem; margin-top: 0.5rem; }
 </style>
