@@ -1,8 +1,10 @@
 from fileflow.ai.decision import ClassifyResult, HeuristicClassifier, normalize_target_path
 from fileflow.ai.engine import DecisionEngine
+from fileflow.ai.rule_cache import RuleCache
 from fileflow.analyzer.meta import collect_file_meta
 from fileflow.config import FileFlowConfig
 from fileflow.db.operations import Database
+from fileflow.learning.feedback import FeedbackEngine
 
 
 def test_normalize_target_path_rejects_absolute_and_limits_depth() -> None:
@@ -73,3 +75,67 @@ def test_heuristic_classifier_marks_unknown_types_for_review(tmp_path) -> None:
 
     assert result.action == "review"
     assert result.confidence < 0.6
+
+
+def test_feedback_engine_stores_corrected_rule_cache(tmp_path) -> None:
+    source_dir = tmp_path / "Downloads"
+    target_dir = tmp_path / "Organized"
+    source_dir.mkdir()
+    target_dir.mkdir()
+
+    source_file = source_dir / "invoice_202403.txt"
+    source_file.write_text("hello\n" * 128, encoding="utf-8")
+    original_target = target_dir / "文档" / "文本"
+    original_target.mkdir(parents=True)
+    moved_file = original_target / "invoice_202403.txt"
+    moved_file.write_text("hello\n" * 128, encoding="utf-8")
+
+    config = FileFlowConfig()
+    config.general.target_root = str(target_dir)
+    database = Database(tmp_path / "fileflow.db")
+    database.initialize()
+    move_id = 0
+    import sqlite3
+    with sqlite3.connect(database.path) as connection:
+        cur = connection.execute(
+            """
+            INSERT INTO move_records (
+                source_path, target_path, file_hash, file_size,
+                category, confidence, reason, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(source_file),
+                str(moved_file),
+                None,
+                moved_file.stat().st_size,
+                "document",
+                0.65,
+                "heuristic",
+                "completed",
+            ),
+        )
+        connection.commit()
+        move_id = cur.lastrowid
+
+    engine = FeedbackEngine(config, database)
+    result = engine.apply_correction(move_id, "文档/归档")
+
+    assert result.success is True
+    assert (target_dir / "文档" / "归档" / "invoice_202403.txt").exists()
+
+    replacement = source_dir / "invoice_202404.txt"
+    replacement.write_text("hello\n" * 128, encoding="utf-8")
+    replacement_meta = collect_file_meta(replacement)
+    replacement_meta.name = "invoice_202404"  # type: ignore[misc]
+    replacement_meta.extension = ".txt"  # type: ignore[misc]
+    replacement_meta.parent_dir = source_dir.name  # type: ignore[misc]
+
+    cached = RuleCache(database).lookup(replacement_meta)
+    assert cached is not None
+    assert cached.target_path == "文档/归档"
+    assert cached.source == "rule_cache"
+
+    pattern_rows = database.get_rule_cache_entries(match_type="pattern")
+    assert pattern_rows
+    assert pattern_rows[0]["confidence"] == 0.8

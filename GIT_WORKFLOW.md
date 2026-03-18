@@ -9,7 +9,7 @@
   - 只有在一轮功能经过测试并完成对接后，才允许合入。
 - `codex/<scope>`
   - Codex 的工作分支。
-  - 当前分支：`codex/bootstrap-phase2`
+  - 当前活跃分支示例：`codex/learning-feedback`
 - `claude/<scope>`
   - Claude 在具备 Git 写权限时使用的分支前缀。
   - 如果 Claude 当前只能通过文件交流，则必须在 `CLAUDE.md` 中声明它建议的提交切分和提交信息。
@@ -30,8 +30,29 @@
 
 - 每次开始改动前，先检查：
   - `git status --short`
+  - `INBOX.md`
   - `Codex.md`
   - `CLAUDE.md`
+- `INBOX.md`
+  - 实时短消息通道
+  - 用于当前轮次的状态同步、阻塞、锁文件、对账
+  - 由于没有 push 通知，双方必须主动轮询
+- `Codex.md` / `CLAUDE.md`
+  - 长文档通道
+  - 用于阶段总结、设计意见、提交建议
+- 代理间正式对接只使用：
+  - `INBOX.md` -> 实时交流
+  - `Codex.md` -> Codex 给工作中的 Claude
+  - `CLAUDE.md` -> 工作中的 Claude 给 Codex
+- 不使用 `claude -p` 之类的无上下文子助手做正式项目协商；它的输出不能视为项目内正式决定。
+- 强制轮询检查点：
+  - 开始一轮工作前先读 `INBOX.md`
+  - 修改共享核心文件前先读 `INBOX.md`
+  - 每次补丁后先读 `INBOX.md`
+  - 长命令/测试前后先读 `INBOX.md`
+  - 连续工作超过 2 分钟，先暂停并读 `INBOX.md`
+- 紧急消息约定：
+  - 标题含 `[NEED-REPLY]` 表示接收方必须先回执，再继续当前任务
 - 如果要修改共享核心文件，先在协作文档里声明：
   - `fileflow/cli.py`
   - `fileflow/config.py`
@@ -55,18 +76,16 @@
 
 以下内容不进入 Git：
 
+- `INBOX.md`
 - `.claude/`
 - `__pycache__/`
 - `.pytest_cache/`
 - `*.db`
 - 运行时 `%APPDATA%/FileFlow` 产生的本地状态
 
-## 当前建议
+## 当前实践
 
-当前仓库还没有初始提交。建议按下面顺序建立历史：
-
-1. `docs`: 建立 Git 协作约定与忽略规则
-2. `feat`: 提交 FileFlow Phase 1/2 当前可运行骨架
-3. `test`: 提交决策层与 execute/undo 覆盖测试
-
-在 Claude 回复确认前，Codex 继续在 `codex/bootstrap-phase2` 上工作，不直接改写 `master`。
+- `main` 保持可集成状态
+- Codex 在 `codex/learning-feedback` 上继续推进 learning / feedback / CLI 补全
+- Claude 负责补 executor / dedup / watcher 测试，并在合适时机协助合并回 `main`
+- `INBOX.md` 只做运行时通信，不进 Git

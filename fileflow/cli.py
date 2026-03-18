@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -32,6 +34,7 @@ from fileflow.utils.logger import configure_logging
 app = typer.Typer(help="FileFlow CLI")
 source_app = typer.Typer(help="Manage source folders")
 config_app = typer.Typer(help="Inspect and edit config")
+feedback_app = typer.Typer(help="Record and inspect user corrections")
 console = Console()
 
 
@@ -117,6 +120,26 @@ def config_set(key: str, value: str) -> None:
     console.print(f"[green]Updated[/green] {key} = {value}")
 
 
+@config_app.command("edit")
+def config_edit() -> None:
+    """Open the config file in the preferred editor."""
+    _require_initialized()
+    paths = resolve_app_paths()
+    editor = os.getenv("EDITOR")
+
+    if editor:
+        subprocess.run([editor, str(paths.config_file)], check=False)
+        console.print(f"[green]Opened config in {editor}[/green]")
+        return
+
+    if hasattr(os, "startfile"):
+        os.startfile(str(paths.config_file))  # type: ignore[attr-defined]
+        console.print(f"[green]Opened config[/green] {paths.config_file}")
+        return
+
+    console.print(f"[yellow]No editor configured. Config file:[/yellow] {paths.config_file}")
+
+
 @app.command()
 def status() -> None:
     paths = resolve_app_paths()
@@ -136,6 +159,7 @@ def status() -> None:
         table.add_row("Source folders", str(len(config.sources.paths)))
         table.add_row("Move records", str(stats.move_records))
         table.add_row("Rule cache rows", str(stats.rule_cache_rows))
+        table.add_row("Corrections", str(stats.corrections))
         table.add_row("Scans logged", str(stats.scan_logs))
         table.add_row("Last scan", stats.last_scan_at or "never")
 
@@ -270,6 +294,16 @@ def scan(
 
 
 @app.command()
+def preview(
+    path: Path | None = typer.Option(None, help="Preview a custom path instead of configured sources."),
+    file_type: str | None = typer.Option(None, "--type", help="Filter by broad category."),
+    ai: bool = typer.Option(False, "--ai", help="Use AI classification (requires LLM provider)."),
+) -> None:
+    """Explicit preview alias for `scan` without execution."""
+    scan(path=path, file_type=file_type, ai=ai, execute=False)
+
+
+@app.command()
 def undo(
     last: int = typer.Option(1, "--last", "-n", help="Undo the last n moves."),
     all_today: bool = typer.Option(False, "--all", help="Undo all moves made today."),
@@ -340,6 +374,107 @@ def history(
 
 
 @app.command()
+def rules(
+    limit: int = typer.Option(20, "--limit", "-n", help="Number of rules to show."),
+    match_type: str | None = typer.Option(
+        None,
+        "--type",
+        help="Filter by rule type: exact, pattern, type_dir.",
+    ),
+) -> None:
+    """Show learned rules from the rule cache."""
+    _require_initialized()
+    paths = resolve_app_paths()
+    from fileflow.learning.rules import RuleManager
+
+    manager = RuleManager(Database(paths.database_file))
+    entries = manager.list_rules(limit=limit, match_type=match_type)
+
+    if not entries:
+        console.print("[yellow]No learned rules yet.[/yellow]")
+        return
+
+    table = Table(title="Learned Rules")
+    table.add_column("Type", style="dim")
+    table.add_column("Match", max_width=26)
+    table.add_column("Target", max_width=24)
+    table.add_column("Confidence", justify="right")
+    table.add_column("Hits", justify="right")
+    table.add_column("Last Hit", style="dim")
+
+    for entry in entries:
+        table.add_row(
+            entry.match_type,
+            entry.match_key,
+            entry.target_path,
+            f"{entry.confidence:.2f}",
+            str(entry.hit_count),
+            entry.last_hit or "-",
+        )
+
+    console.print(table)
+
+
+@feedback_app.command("apply")
+def feedback_apply(
+    move_id: int = typer.Argument(..., help="Move record id from `fileflow history`."),
+    target_path: str = typer.Argument(..., help="Correct relative target path, e.g. 文档/财务/发票"),
+) -> None:
+    """Apply a user correction and teach the rule cache."""
+    _require_initialized()
+    config = load_config()
+    paths = resolve_app_paths()
+    from fileflow.learning.feedback import FeedbackEngine
+
+    engine = FeedbackEngine(config, Database(paths.database_file))
+    result = engine.apply_correction(move_id, target_path)
+    if not result.success:
+        console.print(f"[red]{result.message}[/red]")
+        raise typer.Exit(code=1)
+
+    console.print(
+        f"[green]Correction applied[/green] #{result.move_record_id}: "
+        f"{result.original_target} -> {result.corrected_target}"
+    )
+    if result.final_path:
+        console.print(f"Final path: {result.final_path}")
+
+
+@feedback_app.command("list")
+def feedback_list(
+    limit: int = typer.Option(20, "--limit", "-n", help="Number of corrections to show."),
+) -> None:
+    """Show recent user corrections."""
+    _require_initialized()
+    paths = resolve_app_paths()
+    database = Database(paths.database_file)
+    corrections = database.get_corrections(limit)
+
+    if not corrections:
+        console.print("[yellow]No corrections yet.[/yellow]")
+        return
+
+    table = Table(title="Corrections")
+    table.add_column("ID", style="dim")
+    table.add_column("Move ID", style="dim")
+    table.add_column("File", max_width=24)
+    table.add_column("From", max_width=24)
+    table.add_column("To", max_width=24)
+    table.add_column("Time", style="dim")
+
+    for item in corrections:
+        table.add_row(
+            str(item["id"]),
+            str(item["move_record_id"]),
+            Path(item["source_path"]).name if item.get("source_path") else "-",
+            item["original_target"],
+            item["corrected_target"],
+            item["created_at"],
+        )
+    console.print(table)
+
+
+@app.command()
 def watch(
     execute: bool = typer.Option(False, "--execute", "-e", help="Move files automatically (default is preview)."),
     ai: bool = typer.Option(False, "--ai", help="Use AI classification."),
@@ -396,6 +531,7 @@ def dedup(
 
 app.add_typer(source_app, name="source")
 app.add_typer(config_app, name="config")
+app.add_typer(feedback_app, name="feedback")
 
 
 def main() -> None:
