@@ -68,6 +68,14 @@ def create_app() -> FastAPI:
         items = Database(paths.database_file).get_corrections(limit)
         return {"items": items}
 
+    @app.get("/scans")
+    def scans(limit: int = Query(20, ge=1, le=500)) -> dict[str, list[dict]]:
+        if not is_initialized():
+            raise HTTPException(status_code=404, detail="FileFlow is not initialized")
+        paths = resolve_app_paths()
+        items = Database(paths.database_file).get_scan_logs(limit)
+        return {"items": items}
+
     return app
 
 
