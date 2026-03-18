@@ -1,0 +1,50 @@
+[general]
+target_root = "D:/Organized"
+dry_run = true
+create_shortcut = true
+scan_interval_minutes = 30
+log_level = "INFO"
+
+[sources]
+paths = [
+    "C:/Users/你的用户名/Downloads",
+    "C:/Users/你的用户名/Desktop",
+]
+exclude_patterns = [
+    "*.tmp",
+    "*.crdownload",
+    "Thumbs.db",
+    "desktop.ini",
+    ".git/**",
+    "node_modules/**",
+    "__pycache__/**",
+]
+min_file_size_kb = 1
+max_file_size_mb = 5120
+
+[llm]
+provider = "openclaw"
+ollama_model = "qwen3:8b"
+ollama_url = "http://localhost:11434"
+max_tokens = 500
+temperature = 0.1
+batch_size = 10
+
+[categories]
+top_level = [
+    "文档",
+    "代码项目",
+    "图片与设计",
+    "安装包",
+    "压缩包",
+    "视频音频",
+    "其他",
+]
+max_depth = 3
+
+[safety]
+protected_paths = [
+    "C:/Windows",
+    "C:/Program Files",
+]
+log_retention_days = 90
