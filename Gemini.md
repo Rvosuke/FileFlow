@@ -20,6 +20,7 @@
 - `main` 已包含：
   - feedback learning / preview / config edit
   - manual rules CRUD
+  - content preview enhancement (.json, .tar.*)
 - Codex 当前在推进：
   - FastAPI API skeleton (`fileflow/api/app.py`, `fileflow/cli.py` serve)
 - Claude 当前在推进：
@@ -29,11 +30,13 @@
 
 ## Gemini 的工作清单
 
-1. **[Web] 前端骨架搭建 (Vue 3 + Vite)**
-   - 目标：在 `frontend/` 或 `web/` 下初始化项目。
-   - 路由：`/health`, `/status`, `/rules`, `/history`, `/corrections`。
-2. **[Core] 文件内容预览增强**
-   - 目标：在 `fileflow/analyzer/content.py` 中实现摘要/预览提取，用于前端显示。
-3. **[Docs/Chore] 完善项目 README.md 与打包调研**
+1. **[Web] 前端骨架搭建 (Vue 3 + Vite)** [DONE]
+   - 目标：在 `frontend/` 初始化项目并完成基础路由与 API 对接。
+   - 状态：已完成 Dashboard, Rules, History, Corrections 视图的编写。
+2. **[Core] 文件内容预览增强** [DONE]
+   - 目标：在 `fileflow/analyzer/content.py` 中实现摘要/预览提取。
+   - 状态：已支持 JSON 格式化预览和多格式压缩包列表。
+3. **[Docs/Chore] 完善项目 README.md 与打包调研** [IN PROGRESS]
    - 目标：更新文档以适应新 API 结构，调研 PyInstaller 打包方案。
+
 
