@@ -225,3 +225,31 @@ def test_rules_delete(monkeypatch, tmp_path: Path) -> None:
 
     remaining = database.get_rule_cache_entries(match_type="exact")
     assert remaining == []
+
+
+def test_serve_invokes_uvicorn(monkeypatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake_run(app_path: str, host: str, port: int, reload: bool) -> None:
+        calls.append(
+            {
+                "app_path": app_path,
+                "host": host,
+                "port": port,
+                "reload": reload,
+            }
+        )
+
+    monkeypatch.setattr("uvicorn.run", fake_run)
+
+    result = runner.invoke(app, ["serve", "--host", "0.0.0.0", "--port", "9000"])
+
+    assert result.exit_code == 0
+    assert calls == [
+        {
+            "app_path": "fileflow.api.app:app",
+            "host": "0.0.0.0",
+            "port": 9000,
+            "reload": False,
+        }
+    ]
