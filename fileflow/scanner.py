@@ -92,4 +92,11 @@ class FileScanner:
         for pattern in self.config.sources.exclude_patterns:
             if fnmatch(relative, pattern) or fnmatch(name, pattern):
                 return True
+            # Handle directory-based patterns like "node_modules/**":
+            # check if any ancestor directory matches the pattern prefix
+            dir_pattern = pattern.rstrip("/*")
+            if dir_pattern != pattern:
+                for part in path.relative_to(root).parts:
+                    if fnmatch(part, dir_pattern):
+                        return True
         return False
