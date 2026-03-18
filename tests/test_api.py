@@ -15,6 +15,19 @@ def test_health_endpoint() -> None:
     assert response.json() == {"status": "ok"}
 
 
+def test_health_endpoint_includes_cors_headers() -> None:
+    client = TestClient(create_app())
+    response = client.options(
+        "/health",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
 def test_status_endpoint_requires_initialization(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("FILEFLOW_HOME", str(tmp_path / "app"))
     client = TestClient(create_app())
