@@ -20,6 +20,32 @@ fileflow source add "C:\Users\<you>\Downloads"
 fileflow scan
 ```
 
+## Web UI 与 API
+
+FileFlow 现在包含一个基于 FastAPI 的后端和 Vue 3 的前端界面。
+
+### 启动后端 API
+
+```powershell
+fileflow serve
+```
+默认运行在 `http://localhost:8000`。提供以下端点：
+- `/health`: 健康检查
+- `/status`: 系统状态与统计信息
+- `/rules`: 规则列表与过滤
+- `/history`: 移动历史记录
+- `/corrections`: 用户反馈/修正记录
+- `/scans`: 扫描日志
+
+### 启动前端界面
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+默认访问地址：`http://localhost:5173`。
+
 ## 当前命令
 
 ```powershell

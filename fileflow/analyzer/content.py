@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 import zipfile
+import tarfile
+import json
 
 
 PREVIEW_CHAR_LIMIT = 500
@@ -25,9 +27,20 @@ def read_text_with_fallbacks(path: Path, max_bytes: int = 8192) -> str:
 
 
 def extract_text_preview(path: Path) -> str:
-    if path.suffix.lower() == ".pdf":
+    suffix = path.suffix.lower()
+    if suffix == ".pdf":
         return "PDF preview requires a parser and is deferred to a later phase."
+    if suffix == ".json":
+        return extract_json_preview(path)
     return truncate_preview(read_text_with_fallbacks(path))
+
+
+def extract_json_preview(path: Path) -> str:
+    try:
+        data = json.loads(read_text_with_fallbacks(path))
+        return truncate_preview(json.dumps(data, indent=2, ensure_ascii=False))
+    except json.JSONDecodeError:
+        return truncate_preview(read_text_with_fallbacks(path))
 
 
 def extract_code_header(path: Path) -> str:
@@ -45,14 +58,24 @@ def extract_code_header(path: Path) -> str:
 
 
 def extract_image_exif(path: Path) -> str:
-    return f"image metadata preview pending for {path.suffix.lower()} files"
+    return f"image metadata preview pending for {path.suffix.lower()} files. (Requires Pillow)"
 
 
 def extract_archive_listing(path: Path) -> str:
-    if path.suffix.lower() != ".zip":
-        return f"archive listing preview pending for {path.suffix.lower()} files"
-    with zipfile.ZipFile(path) as archive:
-        names = archive.namelist()[:10]
+    suffix = path.suffix.lower()
+    names = []
+    try:
+        if suffix == ".zip":
+            with zipfile.ZipFile(path) as archive:
+                names = archive.namelist()[:10]
+        elif suffix in (".tar", ".gz", ".bz2", ".xz", ".tgz"):
+            with tarfile.open(path) as archive:
+                names = [m.name for m in archive.getmembers()[:10]]
+        else:
+            return f"archive listing preview pending for {suffix} files"
+    except (zipfile.BadZipFile, tarfile.TarError) as exc:
+        return f"archive error: {exc}"
+    
     if not names:
         return "empty archive"
     return truncate_preview("\n".join(names))

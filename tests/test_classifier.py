@@ -7,14 +7,14 @@ from fileflow.analyzer.classifier import classify_broad_category, CATEGORY_EXTEN
 
 # -- document extensions --
 
-@pytest.mark.parametrize("ext", [".pdf", ".docx", ".txt", ".csv", ".xlsx", ".md", ".pptx"])
+@pytest.mark.parametrize("ext", [".pdf", ".docx", ".txt", ".csv", ".xlsx", ".md", ".pptx", ".json"])
 def test_document_extensions(ext: str) -> None:
     assert classify_broad_category(ext) == "document"
 
 
 # -- code extensions --
 
-@pytest.mark.parametrize("ext", [".py", ".js", ".ts", ".java", ".rs", ".go", ".cpp", ".html", ".json"])
+@pytest.mark.parametrize("ext", [".py", ".js", ".ts", ".java", ".rs", ".go", ".cpp", ".html"])
 def test_code_extensions(ext: str) -> None:
     assert classify_broad_category(ext) == "code"
 
