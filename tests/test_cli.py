@@ -191,9 +191,18 @@ def test_rules_add_pattern_and_exact(monkeypatch, tmp_path: Path) -> None:
     assert add_exact_result.exit_code == 0
     assert "Added exact rule" in add_exact_result.stdout
 
+    add_type_dir_result = runner.invoke(
+        app,
+        ["rules", "add-type-dir", ".exe", "Downloads", "安装包/开发工具"],
+    )
+    assert add_type_dir_result.exit_code == 0
+    assert "Added type_dir rule" in add_type_dir_result.stdout
+
     database = Database(app_home / "fileflow.db")
     pattern_rules = database.get_rule_cache_entries(match_type="pattern")
     exact_rules = database.get_rule_cache_entries(match_type="exact")
+    type_dir_rules = database.get_rule_cache_entries(match_type="type_dir")
 
     assert any(rule["match_key"] == r"invoice_\d+\.txt" for rule in pattern_rules)
     assert any(rule["match_key"] == "salary_slip.pdf" for rule in exact_rules)
+    assert any(rule["match_key"] == ".exe:Downloads" for rule in type_dir_rules)
