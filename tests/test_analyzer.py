@@ -51,3 +51,16 @@ def test_collect_file_meta_for_json_file(tmp_path: Path) -> None:
 
     assert meta.broad_category == "document"
     assert '"key": "value"' in meta.content_preview
+
+
+def test_collect_file_meta_for_image_file(tmp_path: Path) -> None:
+    png_path = tmp_path / "test.png"
+    # Valid PNG header + IHDR chunk with 100x200 dimensions
+    import struct
+    png_header = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR" + struct.pack(">II", 100, 200) + b"\x08\x02\x00\x00\x00"
+    png_path.write_bytes(png_header)
+
+    meta = collect_file_meta(png_path)
+
+    assert meta.broad_category == "image"
+    assert "100x200" in meta.content_preview

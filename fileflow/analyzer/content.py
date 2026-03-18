@@ -57,8 +57,46 @@ def extract_code_header(path: Path) -> str:
     return truncate_preview(body)
 
 
+import struct
+
+
 def extract_image_exif(path: Path) -> str:
-    return f"image metadata preview pending for {path.suffix.lower()} files. (Requires Pillow)"
+    """Extract basic image dimensions without external dependencies."""
+    suffix = path.suffix.lower()
+    try:
+        size = path.stat().st_size
+        with path.open("rb") as f:
+            data = f.read(32)
+            
+            if suffix == ".png":
+                # PNG dimensions are at offset 16
+                if data[12:16] == b"IHDR":
+                    w, h = struct.unpack(">II", data[16:24])
+                    return f"PNG Image, {w}x{h}, {size} bytes"
+            
+            elif suffix in (".jpg", ".jpeg"):
+                # JPEG is more complex to parse without a library, but we can try to find the SOF marker
+                f.seek(0)
+                data = f.read(2)
+                if data == b"\xff\xd8": # SOI
+                    while True:
+                        marker = f.read(2)
+                        if not marker or marker[0] != 0xff:
+                            break
+                        if marker[1] in (0xc0, 0xc1, 0xc2, 0xc3): # SOF markers
+                            f.read(3) # length + precision
+                            h, w = struct.unpack(">HH", f.read(4))
+                            return f"JPEG Image, {w}x{h}, {size} bytes"
+                        # Skip this segment
+                        seg_len_data = f.read(2)
+                        if not seg_len_data:
+                            break
+                        seg_len = struct.unpack(">H", seg_len_data)[0]
+                        f.seek(seg_len - 2, 1)
+        
+        return f"Image, {path.suffix.upper()[1:]} format, {size} bytes (Full EXIF requires Pillow)"
+    except Exception as exc:
+        return f"image preview unavailable: {exc}"
 
 
 def extract_archive_listing(path: Path) -> str:
