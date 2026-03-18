@@ -33,6 +33,8 @@ def test_status_endpoint_requires_initialization(monkeypatch, tmp_path: Path) ->
     client = TestClient(create_app())
     response = client.get("/status")
     assert response.status_code == 404
+    config_response = client.get("/config")
+    assert config_response.status_code == 404
 
 
 def test_status_rules_history_and_corrections_endpoints(monkeypatch, tmp_path: Path) -> None:
@@ -90,6 +92,12 @@ def test_status_rules_history_and_corrections_endpoints(monkeypatch, tmp_path: P
     status_body = status_response.json()
     assert status_body["stats"]["rule_cache_rows"] >= 1
     assert status_body["stats"]["corrections"] >= 1
+
+    config_response = client.get("/config")
+    assert config_response.status_code == 200
+    config_body = config_response.json()
+    assert config_body["llm"]["provider"] == "openclaw"
+    assert isinstance(config_body["sources"]["paths"], list)
 
     rules_response = client.get("/rules", params={"type": "exact"})
     assert rules_response.status_code == 200
