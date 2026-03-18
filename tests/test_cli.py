@@ -206,3 +206,22 @@ def test_rules_add_pattern_and_exact(monkeypatch, tmp_path: Path) -> None:
     assert any(rule["match_key"] == r"invoice_\d+\.txt" for rule in pattern_rules)
     assert any(rule["match_key"] == "salary_slip.pdf" for rule in exact_rules)
     assert any(rule["match_key"] == ".exe:Downloads" for rule in type_dir_rules)
+
+
+def test_rules_delete(monkeypatch, tmp_path: Path) -> None:
+    app_home = tmp_path / "app"
+    monkeypatch.setenv("FILEFLOW_HOME", str(app_home))
+
+    assert runner.invoke(app, ["init"]).exit_code == 0
+    assert runner.invoke(app, ["rules", "add-exact", "salary_slip.pdf", "文档/财务"]).exit_code == 0
+
+    database = Database(app_home / "fileflow.db")
+    exact_rules = database.get_rule_cache_entries(match_type="exact")
+    rule_id = exact_rules[0]["id"]
+
+    delete_result = runner.invoke(app, ["rules", "delete", str(rule_id)])
+    assert delete_result.exit_code == 0
+    assert "Deleted rule" in delete_result.stdout
+
+    remaining = database.get_rule_cache_entries(match_type="exact")
+    assert remaining == []
