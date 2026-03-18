@@ -56,6 +56,13 @@ def create_app() -> FastAPI:
             },
         }
 
+    @app.get("/config")
+    def config_view() -> dict:
+        if not is_initialized():
+            raise HTTPException(status_code=404, detail="FileFlow is not initialized")
+        config = load_config()
+        return config.to_dict()
+
     @app.get("/rules")
     def rules(
         limit: int = Query(20, ge=1, le=500),
