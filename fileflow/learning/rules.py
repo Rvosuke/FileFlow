@@ -34,3 +34,19 @@ class RuleManager:
             )
             for row in rows
         ]
+
+    def add_pattern_rule(self, pattern: str, target_path: str, confidence: float = 0.95) -> None:
+        self.db.upsert_rule_cache(
+            match_type="pattern",
+            match_key=pattern,
+            target_path=target_path,
+            confidence=confidence,
+        )
+
+    def add_exact_rule(self, filename: str, target_path: str, confidence: float = 0.99) -> None:
+        self.db.upsert_rule_cache(
+            match_type="exact",
+            match_key=filename,
+            target_path=target_path,
+            confidence=confidence,
+        )

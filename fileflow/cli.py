@@ -35,6 +35,7 @@ app = typer.Typer(help="FileFlow CLI")
 source_app = typer.Typer(help="Manage source folders")
 config_app = typer.Typer(help="Inspect and edit config")
 feedback_app = typer.Typer(help="Record and inspect user corrections")
+rules_app = typer.Typer(help="Inspect and manage learned rules", invoke_without_command=True)
 console = Console()
 
 
@@ -373,8 +374,7 @@ def history(
     console.print(table)
 
 
-@app.command()
-def rules(
+def _render_rules(
     limit: int = typer.Option(20, "--limit", "-n", help="Number of rules to show."),
     match_type: str | None = typer.Option(
         None,
@@ -382,7 +382,6 @@ def rules(
         help="Filter by rule type: exact, pattern, type_dir.",
     ),
 ) -> None:
-    """Show learned rules from the rule cache."""
     _require_initialized()
     paths = resolve_app_paths()
     from fileflow.learning.rules import RuleManager
@@ -413,6 +412,67 @@ def rules(
         )
 
     console.print(table)
+
+
+@rules_app.callback()
+def rules_callback(
+    ctx: typer.Context,
+    limit: int = typer.Option(20, "--limit", "-n", help="Number of rules to show."),
+    match_type: str | None = typer.Option(
+        None,
+        "--type",
+        help="Filter by rule type: exact, pattern, type_dir.",
+    ),
+) -> None:
+    """Show learned rules from the rule cache."""
+    if ctx.invoked_subcommand is None:
+        _render_rules(limit=limit, match_type=match_type)
+
+
+@rules_app.command("add-pattern")
+def rules_add_pattern(
+    pattern: str = typer.Argument(..., help="Regex pattern matched against full filename."),
+    target_path: str = typer.Argument(..., help="Relative target path, e.g. 文档/归档"),
+    confidence: float = typer.Option(0.95, "--confidence", min=0.0, max=1.0),
+) -> None:
+    """Add or update a manual regex-based rule."""
+    _require_initialized()
+    paths = resolve_app_paths()
+    from fileflow.ai.decision import normalize_target_path
+    from fileflow.learning.rules import RuleManager
+
+    config = load_config()
+    safe_target = normalize_target_path(
+        target_path,
+        allowed_top_levels=config.categories.top_level,
+        fallback_top_level="其他",
+        max_depth=config.categories.max_depth,
+    )
+    RuleManager(Database(paths.database_file)).add_pattern_rule(pattern, safe_target, confidence)
+    console.print(f"[green]Added pattern rule[/green] {pattern} -> {safe_target}")
+
+
+@rules_app.command("add-exact")
+def rules_add_exact(
+    filename: str = typer.Argument(..., help="Exact filename including extension, e.g. invoice_202403.pdf"),
+    target_path: str = typer.Argument(..., help="Relative target path, e.g. 文档/归档"),
+    confidence: float = typer.Option(0.99, "--confidence", min=0.0, max=1.0),
+) -> None:
+    """Add or update an exact filename rule."""
+    _require_initialized()
+    paths = resolve_app_paths()
+    from fileflow.ai.decision import normalize_target_path
+    from fileflow.learning.rules import RuleManager
+
+    config = load_config()
+    safe_target = normalize_target_path(
+        target_path,
+        allowed_top_levels=config.categories.top_level,
+        fallback_top_level="其他",
+        max_depth=config.categories.max_depth,
+    )
+    RuleManager(Database(paths.database_file)).add_exact_rule(filename, safe_target, confidence)
+    console.print(f"[green]Added exact rule[/green] {filename} -> {safe_target}")
 
 
 @feedback_app.command("apply")
@@ -532,6 +592,7 @@ def dedup(
 app.add_typer(source_app, name="source")
 app.add_typer(config_app, name="config")
 app.add_typer(feedback_app, name="feedback")
+app.add_typer(rules_app, name="rules")
 
 
 def main() -> None:

@@ -40,6 +40,8 @@ fileflow feedback apply 12 "文档/归档"
 fileflow feedback list
 fileflow rules
 fileflow rules --type pattern
+fileflow rules add-pattern "invoice_\\d+\\.txt" "文档/归档"
+fileflow rules add-exact "salary_slip.pdf" "文档/财务"
 ```
 
 默认 `scan` 仍然是启发式模式；加上 `--ai` 后会尝试使用 rule cache + LLM 分类，并在失败时自动回退到启发式结果。

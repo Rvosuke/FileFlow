@@ -154,3 +154,36 @@ class Database:
             connection.row_factory = sqlite3.Row
             rows = connection.execute(query, params).fetchall()
         return [dict(row) for row in rows]
+
+    def upsert_rule_cache(
+        self,
+        *,
+        match_type: str,
+        match_key: str,
+        target_path: str,
+        confidence: float,
+    ) -> None:
+        with sqlite3.connect(self.path) as connection:
+            existing = connection.execute(
+                "SELECT id FROM rule_cache WHERE match_type = ? AND match_key = ?",
+                (match_type, match_key),
+            ).fetchone()
+            if existing:
+                connection.execute(
+                    """
+                    UPDATE rule_cache
+                    SET target_path = ?, confidence = ?, hit_count = hit_count + 1, last_hit = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (target_path, confidence, existing[0]),
+                )
+            else:
+                connection.execute(
+                    """
+                    INSERT INTO rule_cache (
+                        match_type, match_key, target_path, confidence, hit_count, last_hit
+                    ) VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+                    """,
+                    (match_type, match_key, target_path, confidence),
+                )
+            connection.commit()
