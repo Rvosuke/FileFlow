@@ -55,6 +55,14 @@ def test_status_rules_history_and_corrections_endpoints(monkeypatch, tmp_path: P
         move_id = cur.lastrowid
         connection.execute(
             """
+            INSERT INTO scan_logs (
+                source_path, files_found, files_moved, files_skipped, files_cached, llm_calls, duration_ms
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (str(tmp_path), 5, 3, 2, 1, 0, 42),
+        )
+        connection.execute(
+            """
             INSERT INTO corrections (move_record_id, original_target, corrected_target)
             VALUES (?, ?, ?)
             """,
@@ -81,3 +89,7 @@ def test_status_rules_history_and_corrections_endpoints(monkeypatch, tmp_path: P
     corrections_response = client.get("/corrections")
     assert corrections_response.status_code == 200
     assert corrections_response.json()["items"][0]["corrected_target"] == "文档/归档"
+
+    scans_response = client.get("/scans")
+    assert scans_response.status_code == 200
+    assert scans_response.json()["items"][0]["files_found"] == 5
