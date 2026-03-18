@@ -114,3 +114,61 @@ def test_status_rules_history_and_corrections_endpoints(monkeypatch, tmp_path: P
     scans_response = client.get("/scans")
     assert scans_response.status_code == 200
     assert scans_response.json()["items"][0]["files_found"] == 5
+
+
+def test_rules_write_endpoints(monkeypatch, tmp_path: Path) -> None:
+    app_home = tmp_path / "app"
+    monkeypatch.setenv("FILEFLOW_HOME", str(app_home))
+    initialize_app(home=app_home)
+
+    client = TestClient(create_app())
+
+    exact_response = client.post(
+        "/rules/exact",
+        json={
+            "filename": "salary_slip.pdf",
+            "target_path": "文档/财务",
+            "confidence": 0.99,
+        },
+    )
+    assert exact_response.status_code == 201
+    exact_item = exact_response.json()["item"]
+    assert exact_item["match_type"] == "exact"
+    assert exact_item["match_key"] == "salary_slip.pdf"
+
+    pattern_response = client.post(
+        "/rules/pattern",
+        json={
+            "pattern": r"invoice_\d+\.pdf",
+            "target_path": "文档/归档",
+            "confidence": 0.95,
+        },
+    )
+    assert pattern_response.status_code == 201
+    pattern_item = pattern_response.json()["item"]
+    assert pattern_item["match_type"] == "pattern"
+
+    type_dir_response = client.post(
+        "/rules/type-dir",
+        json={
+            "extension": "exe",
+            "parent_dir": "Downloads",
+            "target_path": "其他/安装包",
+            "confidence": 0.9,
+        },
+    )
+    assert type_dir_response.status_code == 201
+    type_dir_item = type_dir_response.json()["item"]
+    assert type_dir_item["match_type"] == "type_dir"
+    assert type_dir_item["match_key"] == ".exe:Downloads"
+
+    rules_response = client.get("/rules")
+    assert rules_response.status_code == 200
+    assert len(rules_response.json()["items"]) == 3
+
+    delete_response = client.delete(f"/rules/{exact_item['id']}")
+    assert delete_response.status_code == 200
+    assert delete_response.json() == {"deleted": True, "id": exact_item["id"]}
+
+    missing_delete = client.delete(f"/rules/{exact_item['id']}")
+    assert missing_delete.status_code == 404
