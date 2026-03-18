@@ -169,3 +169,40 @@ def test_feedback_learning_affects_future_ai_scan(monkeypatch, tmp_path: Path) -
     assert ai_scan_result.exit_code == 0
     assert "1 cache hits" in ai_scan_result.stdout
     assert "文档/归档" in ai_scan_result.stdout
+
+
+def test_rules_add_pattern_and_exact(monkeypatch, tmp_path: Path) -> None:
+    app_home = tmp_path / "app"
+    monkeypatch.setenv("FILEFLOW_HOME", str(app_home))
+
+    assert runner.invoke(app, ["init"]).exit_code == 0
+
+    add_pattern_result = runner.invoke(
+        app,
+        ["rules", "add-pattern", r"invoice_\d+\.txt", "文档/归档"],
+    )
+    assert add_pattern_result.exit_code == 0
+    assert "Added pattern rule" in add_pattern_result.stdout
+
+    add_exact_result = runner.invoke(
+        app,
+        ["rules", "add-exact", "salary_slip.pdf", "文档/财务"],
+    )
+    assert add_exact_result.exit_code == 0
+    assert "Added exact rule" in add_exact_result.stdout
+
+    add_type_dir_result = runner.invoke(
+        app,
+        ["rules", "add-type-dir", ".exe", "Downloads", "安装包/开发工具"],
+    )
+    assert add_type_dir_result.exit_code == 0
+    assert "Added type_dir rule" in add_type_dir_result.stdout
+
+    database = Database(app_home / "fileflow.db")
+    pattern_rules = database.get_rule_cache_entries(match_type="pattern")
+    exact_rules = database.get_rule_cache_entries(match_type="exact")
+    type_dir_rules = database.get_rule_cache_entries(match_type="type_dir")
+
+    assert any(rule["match_key"] == r"invoice_\d+\.txt" for rule in pattern_rules)
+    assert any(rule["match_key"] == "salary_slip.pdf" for rule in exact_rules)
+    assert any(rule["match_key"] == ".exe:Downloads" for rule in type_dir_rules)

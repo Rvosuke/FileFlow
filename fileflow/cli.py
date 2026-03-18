@@ -475,6 +475,37 @@ def rules_add_exact(
     console.print(f"[green]Added exact rule[/green] {filename} -> {safe_target}")
 
 
+@rules_app.command("add-type-dir")
+def rules_add_type_dir(
+    extension: str = typer.Argument(..., help="File extension, e.g. .exe or exe"),
+    parent_dir: str = typer.Argument(..., help="Source parent directory name, e.g. Downloads"),
+    target_path: str = typer.Argument(..., help="Relative target path, e.g. 安装包/开发工具"),
+    confidence: float = typer.Option(0.9, "--confidence", min=0.0, max=1.0),
+) -> None:
+    """Add or update an extension + source-directory rule."""
+    _require_initialized()
+    paths = resolve_app_paths()
+    from fileflow.ai.decision import normalize_target_path
+    from fileflow.learning.rules import RuleManager
+
+    config = load_config()
+    safe_target = normalize_target_path(
+        target_path,
+        allowed_top_levels=config.categories.top_level,
+        fallback_top_level="其他",
+        max_depth=config.categories.max_depth,
+    )
+    RuleManager(Database(paths.database_file)).add_type_dir_rule(
+        extension=extension,
+        parent_dir=parent_dir,
+        target_path=safe_target,
+        confidence=confidence,
+    )
+    console.print(
+        f"[green]Added type_dir rule[/green] {extension.lower()}:{parent_dir} -> {safe_target}"
+    )
+
+
 @feedback_app.command("apply")
 def feedback_apply(
     move_id: int = typer.Argument(..., help="Move record id from `fileflow history`."),
