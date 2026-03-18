@@ -1,0 +1,101 @@
+from __future__ import annotations
+
+
+CATEGORY_EXTENSIONS: dict[str, set[str]] = {
+    "document": {
+        ".csv",
+        ".doc",
+        ".docx",
+        ".md",
+        ".odt",
+        ".pdf",
+        ".ppt",
+        ".pptx",
+        ".rtf",
+        ".tex",
+        ".toml",
+        ".txt",
+        ".xls",
+        ".xlsx",
+        ".yaml",
+        ".yml",
+    },
+    "code": {
+        ".bat",
+        ".c",
+        ".cpp",
+        ".cs",
+        ".go",
+        ".h",
+        ".hpp",
+        ".html",
+        ".java",
+        ".js",
+        ".json",
+        ".jsx",
+        ".kt",
+        ".php",
+        ".ps1",
+        ".py",
+        ".rb",
+        ".rs",
+        ".sh",
+        ".sql",
+        ".ts",
+        ".tsx",
+        ".vue",
+    },
+    "image": {
+        ".ai",
+        ".bmp",
+        ".gif",
+        ".heic",
+        ".ico",
+        ".jpeg",
+        ".jpg",
+        ".png",
+        ".psd",
+        ".svg",
+        ".tif",
+        ".tiff",
+        ".webp",
+    },
+    "installer": {
+        ".appx",
+        ".deb",
+        ".dmg",
+        ".exe",
+        ".msi",
+        ".pkg",
+    },
+    "archive": {
+        ".7z",
+        ".gz",
+        ".rar",
+        ".tar",
+        ".tgz",
+        ".xz",
+        ".zip",
+    },
+    "media": {
+        ".aac",
+        ".avi",
+        ".flac",
+        ".m4a",
+        ".mkv",
+        ".mov",
+        ".mp3",
+        ".mp4",
+        ".wav",
+        ".webm",
+        ".wmv",
+    },
+}
+
+
+def classify_broad_category(extension: str) -> str:
+    normalized = extension.lower()
+    for category, extensions in CATEGORY_EXTENSIONS.items():
+        if normalized in extensions:
+            return category
+    return "other"
