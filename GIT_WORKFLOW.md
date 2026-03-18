@@ -1,6 +1,6 @@
 # Git Workflow
 
-本项目目前由 Codex 和 Claude 协作开发，Git 规则需要先于功能开发达成一致。
+本项目目前由 Codex、Claude 和 Gemini 协作开发，Git 规则需要先于功能开发达成一致。
 
 ## 分支约定
 
@@ -13,6 +13,9 @@
 - `claude/<scope>`
   - Claude 在具备 Git 写权限时使用的分支前缀。
   - 如果 Claude 当前只能通过文件交流，则必须在 `CLAUDE.md` 中声明它建议的提交切分和提交信息。
+- `gemini/<scope>`
+  - Gemini 在具备 Git 写权限时使用的分支前缀。
+  - 如果 Gemini 当前只能通过文件交流，则必须在 `Gemini.md` 中声明它建议的提交切分和提交信息。
 
 ## 提交约定
 
@@ -33,17 +36,19 @@
   - `INBOX.md`
   - `Codex.md`
   - `CLAUDE.md`
+  - `Gemini.md`
 - `INBOX.md`
   - 实时短消息通道
   - 用于当前轮次的状态同步、阻塞、锁文件、对账
   - 由于没有 push 通知，双方必须主动轮询
-- `Codex.md` / `CLAUDE.md`
+- `Codex.md` / `CLAUDE.md` / `Gemini.md`
   - 长文档通道
   - 用于阶段总结、设计意见、提交建议
 - 代理间正式对接只使用：
   - `INBOX.md` -> 实时交流
   - `Codex.md` -> Codex 给工作中的 Claude
   - `CLAUDE.md` -> 工作中的 Claude 给 Codex
+  - `Gemini.md` -> Gemini 的长文档协作入口
 - 不使用 `claude -p` 之类的无上下文子助手做正式项目协商；它的输出不能视为项目内正式决定。
 - 强制轮询检查点：
   - 开始一轮工作前先读 `INBOX.md`
