@@ -42,6 +42,7 @@ fileflow rules
 fileflow rules --type pattern
 fileflow rules add-pattern "invoice_\\d+\\.txt" "文档/归档"
 fileflow rules add-exact "salary_slip.pdf" "文档/财务"
+fileflow rules add-type-dir ".exe" "Downloads" "安装包/开发工具"
 ```
 
 默认 `scan` 仍然是启发式模式；加上 `--ai` 后会尝试使用 rule cache + LLM 分类，并在失败时自动回退到启发式结果。

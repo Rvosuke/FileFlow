@@ -50,3 +50,18 @@ class RuleManager:
             target_path=target_path,
             confidence=confidence,
         )
+
+    def add_type_dir_rule(
+        self,
+        extension: str,
+        parent_dir: str,
+        target_path: str,
+        confidence: float = 0.9,
+    ) -> None:
+        normalized_extension = extension if extension.startswith(".") else f".{extension}"
+        self.db.upsert_rule_cache(
+            match_type="type_dir",
+            match_key=f"{normalized_extension.lower()}:{parent_dir}",
+            target_path=target_path,
+            confidence=confidence,
+        )
