@@ -1,0 +1,8 @@
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.claude/
+*.py[cod]
+*.db
+build/
+dist/
