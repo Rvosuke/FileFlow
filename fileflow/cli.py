@@ -394,6 +394,7 @@ def _render_rules(
         return
 
     table = Table(title="Learned Rules")
+    table.add_column("ID", style="dim", justify="right")
     table.add_column("Type", style="dim")
     table.add_column("Match", max_width=26)
     table.add_column("Target", max_width=24)
@@ -403,6 +404,7 @@ def _render_rules(
 
     for entry in entries:
         table.add_row(
+            str(entry.id),
             entry.match_type,
             entry.match_key,
             entry.target_path,
@@ -504,6 +506,23 @@ def rules_add_type_dir(
     console.print(
         f"[green]Added type_dir rule[/green] {extension.lower()}:{parent_dir} -> {safe_target}"
     )
+
+
+@rules_app.command("delete")
+def rules_delete(
+    rule_id: int = typer.Argument(..., help="Rule cache id shown by `fileflow rules`."),
+) -> None:
+    """Delete a learned rule by id."""
+    _require_initialized()
+    paths = resolve_app_paths()
+    from fileflow.learning.rules import RuleManager
+
+    deleted = RuleManager(Database(paths.database_file)).delete_rule(rule_id)
+    if not deleted:
+        console.print(f"[red]Rule not found:[/red] {rule_id}")
+        raise typer.Exit(code=1)
+
+    console.print(f"[green]Deleted rule[/green] #{rule_id}")
 
 
 @feedback_app.command("apply")

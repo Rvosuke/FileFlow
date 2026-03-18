@@ -7,6 +7,7 @@ from fileflow.db.operations import Database
 
 @dataclass(slots=True)
 class RuleEntry:
+    id: int
     match_type: str
     match_key: str
     target_path: str
@@ -24,6 +25,7 @@ class RuleManager:
         rows = self.db.get_rule_cache_entries(limit=limit, match_type=match_type)
         return [
             RuleEntry(
+                id=int(row["id"]),
                 match_type=row["match_type"],
                 match_key=row["match_key"],
                 target_path=row["target_path"],
@@ -65,3 +67,6 @@ class RuleManager:
             target_path=target_path,
             confidence=confidence,
         )
+
+    def delete_rule(self, rule_id: int) -> bool:
+        return self.db.delete_rule_cache_entry(rule_id)

@@ -138,7 +138,7 @@ class Database:
         match_type: str | None = None,
     ) -> list[dict[str, Any]]:
         query = """
-            SELECT match_type, match_key, target_path, confidence, hit_count, last_hit, created_at
+            SELECT id, match_type, match_key, target_path, confidence, hit_count, last_hit, created_at
             FROM rule_cache
         """
         params: tuple[Any, ...]
@@ -154,6 +154,12 @@ class Database:
             connection.row_factory = sqlite3.Row
             rows = connection.execute(query, params).fetchall()
         return [dict(row) for row in rows]
+
+    def delete_rule_cache_entry(self, rule_id: int) -> bool:
+        with sqlite3.connect(self.path) as connection:
+            cur = connection.execute("DELETE FROM rule_cache WHERE id = ?", (rule_id,))
+            connection.commit()
+            return cur.rowcount > 0
 
     def upsert_rule_cache(
         self,
