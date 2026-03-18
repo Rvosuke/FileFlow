@@ -132,6 +132,29 @@ class Database:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def get_scan_logs(self, limit: int = 20) -> list[dict[str, Any]]:
+        with sqlite3.connect(self.path) as connection:
+            connection.row_factory = sqlite3.Row
+            rows = connection.execute(
+                """
+                SELECT
+                    id,
+                    source_path,
+                    files_found,
+                    files_moved,
+                    files_skipped,
+                    files_cached,
+                    llm_calls,
+                    duration_ms,
+                    created_at
+                FROM scan_logs
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def get_rule_cache_entries(
         self,
         limit: int = 20,

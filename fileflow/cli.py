@@ -639,6 +639,17 @@ def dedup(
     )
 
 
+@app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", help="Bind host for the API server."),
+    port: int = typer.Option(8000, help="Bind port for the API server."),
+) -> None:
+    """Run the FastAPI server."""
+    import uvicorn
+
+    uvicorn.run("fileflow.api.app:app", host=host, port=port, reload=False)
+
+
 app.add_typer(source_app, name="source")
 app.add_typer(config_app, name="config")
 app.add_typer(feedback_app, name="feedback")

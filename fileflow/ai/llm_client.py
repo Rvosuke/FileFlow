@@ -112,9 +112,8 @@ class LLMClient:
         json_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", raw, re.DOTALL)
         json_str = json_match.group(1) if json_match else raw.strip()
 
-        try:
-            items = json.loads(json_str)
-        except json.JSONDecodeError:
+        items = self._load_json_items(json_str)
+        if items is None:
             logger.error("Failed to parse LLM response as JSON: %s", raw[:200])
             return []
 
@@ -160,3 +159,21 @@ class LLMClient:
             ))
 
         return results
+
+    @staticmethod
+    def _load_json_items(raw: str) -> list[dict[str, Any]] | None:
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            sanitized = re.sub(
+                r'("(?:(?:original|target)_path|suggested_rename)"\s*:\s*")([^"]*)(")',
+                lambda m: f'{m.group(1)}{m.group(2).replace("\\", "\\\\")}{m.group(3)}',
+                raw,
+            )
+            sanitized = re.sub(r'(?<!\\)\\(?!["\\/])', r"\\\\", sanitized)
+            if sanitized == raw:
+                return None
+            try:
+                return json.loads(sanitized)
+            except json.JSONDecodeError:
+                return None
