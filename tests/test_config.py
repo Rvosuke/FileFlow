@@ -65,6 +65,9 @@ class TestLLMConfigDefaults:
         cfg = LLMConfig()
         assert cfg.provider == "openclaw"
         assert cfg.ollama_model == "qwen3:8b"
+        assert cfg.openai_model == "gpt-6-astra"
+        assert cfg.openai_base_url == "https://api.openai.com/v1"
+        assert cfg.openai_reasoning_effort == "low"
         assert cfg.temperature == 0.1
         assert cfg.batch_size == 10
 
@@ -116,6 +119,9 @@ class TestFileFlowConfig:
                 "ollama_model": "llama3:8b",
                 "ollama_url": "http://localhost:11434",
                 "openclaw_agent": "main",
+                "openai_model": "gpt-6-astra",
+                "openai_base_url": "https://api.openai.com/v1",
+                "openai_reasoning_effort": "low",
                 "max_tokens": 300,
                 "temperature": 0.5,
                 "batch_size": 20,
@@ -137,6 +143,7 @@ class TestFileFlowConfig:
         assert cfg.sources.paths == ["/tmp/downloads"]
         assert cfg.sources.scan_recursive is False
         assert cfg.llm.provider == "ollama"
+        assert cfg.llm.openai_model == "gpt-6-astra"
         assert cfg.categories.top_level == ["A", "B"]
         assert cfg.safety.log_retention_days == 30
 
@@ -210,7 +217,7 @@ class TestMergeDicts:
     def test_deep_merge(self) -> None:
         base = {"x": {"y": 1, "z": 2}}
         override = {"x": {"z": 3}}
-        assert _merge_dicts(base, override) == {"x": {"y": 1, "z": 3}}
+        assert _merge_dicts(base, {"x": {"z": 3}}) == {"x": {"y": 1, "z": 3}}
 
     def test_base_unmodified(self) -> None:
         base = {"a": {"b": 1}}
@@ -233,6 +240,7 @@ class TestInitializeAndLoadConfig:
         assert config.general.target_root == default_target_root()
         assert config.general.dry_run is True
         assert config.llm.provider == "openclaw"
+        assert config.llm.openai_model == "gpt-6-astra"
 
     def test_load_config_without_init_raises(self, tmp_path: Path) -> None:
         with pytest.raises(FileNotFoundError, match="not initialized"):
@@ -289,6 +297,17 @@ class TestSetConfigValue:
 
         set_config_value(config, "general.scan_interval_minutes", "10")
         assert config.general.scan_interval_minutes == 10
+
+    def test_set_openai_model(self, tmp_path: Path) -> None:
+        home = tmp_path / "app"
+        initialize_app(home=home)
+        config = load_config(home=home)
+
+        set_config_value(config, "llm.openai_model", "gpt-6-astra")
+        set_config_value(config, "llm.provider", "openai")
+
+        assert config.llm.openai_model == "gpt-6-astra"
+        assert config.llm.provider == "openai"
 
     def test_bad_section_raises(self, tmp_path: Path) -> None:
         home = tmp_path / "app"
