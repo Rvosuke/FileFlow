@@ -116,8 +116,8 @@ class LLMClient:
             "model": model,
             "instructions": CLASSIFY_SYSTEM,
             "input": prompt,
-            "max_output_tokens": self.config.llm.max_tokens,
             "reasoning": {"effort": reasoning_effort},
+            "store": False,
         }
         headers = {
             "Authorization": f"Bearer {api_key}",
