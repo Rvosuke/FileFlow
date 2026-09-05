@@ -1,9 +1,10 @@
-"""LLM abstraction layer — supports Ollama and OpenClaw agent."""
+"""LLM abstraction layer — supports Ollama, OpenClaw, and OpenAI."""
 
 from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -26,6 +27,8 @@ if TYPE_CHECKING:
     from fileflow.config import FileFlowConfig
 
 logger = logging.getLogger("fileflow.llm")
+
+OPENAI_REASONING_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 
 
 class LLMClient:
@@ -66,6 +69,8 @@ class LLMClient:
             return self._call_ollama(prompt)
         if self.provider == "openclaw":
             return self._call_openclaw(prompt)
+        if self.provider == "openai":
+            return self._call_openai(prompt)
         raise ValueError(f"Unsupported LLM provider: {self.provider}")
 
     def _call_ollama(self, prompt: str) -> str:
@@ -88,6 +93,77 @@ class LLMClient:
         resp.raise_for_status()
         data = resp.json()
         return data.get("message", {}).get("content", "")
+
+    def _call_openai(self, prompt: str) -> str:
+        """Call the OpenAI Responses API using OPENAI_API_KEY."""
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "OPENAI_API_KEY is not set. Set it before using llm.provider=openai."
+            )
+
+        model = self.config.llm.openai_model
+        base_url = self.config.llm.openai_base_url.rstrip("/")
+        reasoning_effort = self.config.llm.openai_reasoning_effort
+        if reasoning_effort not in OPENAI_REASONING_EFFORTS:
+            allowed = ", ".join(sorted(OPENAI_REASONING_EFFORTS))
+            raise ValueError(
+                f"Unsupported OpenAI reasoning effort: {reasoning_effort}. "
+                f"Expected one of: {allowed}"
+            )
+
+        payload = {
+            "model": model,
+            "instructions": CLASSIFY_SYSTEM,
+            "input": prompt,
+            "max_output_tokens": self.config.llm.max_tokens,
+            "reasoning": {"effort": reasoning_effort},
+        }
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        logger.info(
+            "Calling OpenAI Responses API: model=%s reasoning_effort=%s",
+            model,
+            reasoning_effort,
+        )
+        resp = httpx.post(
+            f"{base_url}/responses",
+            headers=headers,
+            json=payload,
+            timeout=120.0,
+        )
+        resp.raise_for_status()
+        return self._extract_openai_output_text(resp.json())
+
+    @staticmethod
+    def _extract_openai_output_text(data: dict[str, Any]) -> str:
+        """Extract assistant text from a raw Responses API payload."""
+        direct = data.get("output_text")
+        if isinstance(direct, str):
+            return direct.strip()
+
+        text_parts: list[str] = []
+        output = data.get("output", [])
+        if not isinstance(output, list):
+            return ""
+
+        for item in output:
+            if not isinstance(item, dict):
+                continue
+            content = item.get("content", [])
+            if not isinstance(content, list):
+                continue
+            for part in content:
+                if not isinstance(part, dict) or part.get("type") != "output_text":
+                    continue
+                text = part.get("text")
+                if isinstance(text, str):
+                    text_parts.append(text)
+
+        return "\n".join(text_parts).strip()
 
     @staticmethod
     def _openclaw_node_cmd() -> list[str]:
@@ -137,7 +213,7 @@ class LLMClient:
                 "--session-id", session_id,
                 "--message", combined,
             ]
-            env = {**__import__("os").environ, "FORCE_COLOR": "0"}
+            env = {**os.environ, "FORCE_COLOR": "0"}
             result = subprocess.run(
                 cmd,
                 capture_output=True,
