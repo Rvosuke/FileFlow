@@ -40,7 +40,7 @@ fileflow config set llm.openai_base_url https://api.openai.com/v1
 ```
 
 `gpt-6-astra` 不接受自定义 `temperature`；FileFlow 的 OpenAI 调用路径不会发送该参数。
-`llm.temperature` 仍只用于 Ollama。
+`llm.max_tokens` 和 `llm.temperature` 仍只用于 Ollama；OpenAI 响应设置为不存储。
 
 ## Web UI 与 API
 
