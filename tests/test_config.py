@@ -217,7 +217,7 @@ class TestMergeDicts:
     def test_deep_merge(self) -> None:
         base = {"x": {"y": 1, "z": 2}}
         override = {"x": {"z": 3}}
-        assert _merge_dicts(base, {"x": {"z": 3}}) == {"x": {"y": 1, "z": 3}}
+        assert _merge_dicts(base, override) == {"x": {"y": 1, "z": 3}}
 
     def test_base_unmodified(self) -> None:
         base = {"a": {"b": 1}}
