@@ -20,6 +20,28 @@ fileflow source add "C:\Users\<you>\Downloads"
 fileflow scan
 ```
 
+## 使用 GPT-6 Astra
+
+FileFlow 可通过 OpenAI Responses API 直接调用 `gpt-6-astra`。API Key 只从
+`OPENAI_API_KEY` 环境变量读取，不会写入仓库或 `config.toml`。
+
+```powershell
+$env:OPENAI_API_KEY="<your-api-key>"
+fileflow config set llm.provider openai
+fileflow config set llm.openai_model gpt-6-astra
+fileflow config set llm.openai_reasoning_effort low
+fileflow scan --ai
+```
+
+默认 OpenAI API 地址是 `https://api.openai.com/v1`。如需兼容网关，可修改：
+
+```powershell
+fileflow config set llm.openai_base_url https://api.openai.com/v1
+```
+
+`gpt-6-astra` 不接受自定义 `temperature`；FileFlow 的 OpenAI 调用路径不会发送该参数。
+`llm.temperature` 仍只用于 Ollama。
+
 ## Web UI 与 API
 
 FileFlow 现在包含一个基于 FastAPI 的后端和 Vue 3 的前端界面。
