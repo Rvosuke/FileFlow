@@ -63,7 +63,8 @@ def test_openai_uses_gpt_6_astra_responses_api() -> None:
     assert kwargs["headers"]["Authorization"] == "Bearer test-key"
     assert kwargs["json"]["model"] == "gpt-6-astra"
     assert kwargs["json"]["reasoning"] == {"effort": "low"}
-    assert kwargs["json"]["max_output_tokens"] == 500
+    assert kwargs["json"]["store"] is False
+    assert "max_output_tokens" not in kwargs["json"]
     assert "temperature" not in kwargs["json"]
     assert "top_p" not in kwargs["json"]
 
