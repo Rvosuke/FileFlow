@@ -59,6 +59,9 @@ class LLMConfig:
     ollama_model: str = "qwen3:8b"
     ollama_url: str = "http://localhost:11434"
     openclaw_agent: str = "main"
+    openai_model: str = "gpt-6-astra"
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_reasoning_effort: str = "low"
     max_tokens: int = 500
     temperature: float = 0.1
     batch_size: int = 10
@@ -120,6 +123,9 @@ class FileFlowConfig:
                 "ollama_model": self.llm.ollama_model,
                 "ollama_url": self.llm.ollama_url,
                 "openclaw_agent": self.llm.openclaw_agent,
+                "openai_model": self.llm.openai_model,
+                "openai_base_url": self.llm.openai_base_url,
+                "openai_reasoning_effort": self.llm.openai_reasoning_effort,
                 "max_tokens": self.llm.max_tokens,
                 "temperature": self.llm.temperature,
                 "batch_size": self.llm.batch_size,
